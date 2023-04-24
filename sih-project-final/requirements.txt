@@ -27,3 +27,5 @@ pymongo~=4.2.0
 opencv-python~=4.6.0.66
 numpy~=1.23.2
 python-dotenv~=0.20.0
+scikit-image
+numpy
