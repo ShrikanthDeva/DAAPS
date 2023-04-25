@@ -40,6 +40,21 @@ class Aadhar_details(db.Model, UserMixin):
     f_name = db.Column(db.String(20), nullable=False, unique=True)
     m_name = db.Column(db.String(20), nullable=False, unique=True)
 
+class FIR(db.Model, UserMixin):
+    aadhar = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(20), nullable=False, unique=True)
+    contact = db.Column(db.Integer, nullable=False)
+    address = db.Column(db.String(100), nullable=False)
+    gender = db.Column(db.String(20), nullable=False)
+    dob = db.Column(db.DateTime(),nullable=False)
+    informant_name = db.Column(db.String(20), nullable=False)
+    informant_relation = db.Column(db.String(20), nullable=False)
+    fir_no = db.Column(db.Integer, nullable=False, unique=True)
+    fir_date = db.Column(db.DateTime(),nullable=False)
+    police = db.Column(db.String(20), nullable=False)
+
+
+
 class RegisterForm(FlaskForm):
     username = StringField(validators=[
                            InputRequired(), Length(min=4, max=20)], render_kw={"placeholder": "Username"})
@@ -108,11 +123,12 @@ def register():
     return {'success':  False}
 
 # delete police admin
-def delete_admin(u_id):
-    User.query.filter_by(id=u_id).delete()
+def delete_admin():
+    fir_det = FIR.query.filter_by(fir_no=12345678).delete()
     db.session.commit()
-    print("DELETED",u_id)
+    print("DELETED")
 
+# delete_admin()
 
 class RegisterFormUser(FlaskForm):
     name = StringField(validators=[InputRequired(), Length(min=4, max=20)], render_kw={"placeholder": "name"})
@@ -130,6 +146,31 @@ class RegisterFormUser(FlaskForm):
     f_name = StringField(validators=[InputRequired(), Length(min=4, max=20)], render_kw={"placeholder": "f_name"})
  
     m_name = StringField(validators=[InputRequired(), Length(min=4, max=20)], render_kw={"placeholder": "m_name"})
+
+class RegisterFormFir(FlaskForm):
+    name = StringField(validators=[InputRequired(), Length(min=4, max=20)], render_kw={"placeholder": "name"})
+
+    aadhar = IntegerField(validators=[InputRequired(), Length(min=8, max=8)], render_kw={"placeholder": "aadhar"})
+
+    dob = StringField(validators=[InputRequired()], render_kw={"placeholder": "dob"})
+    
+    contact = IntegerField(validators=[InputRequired(), Length(min=10, max=10)], render_kw={"placeholder": "contact"})
+
+    address = StringField(validators=[InputRequired(), Length(min=10, max=100)], render_kw={"placeholder": "address"})
+
+    gender = StringField(validators=[InputRequired(), Length(min=8, max=8)], render_kw={"placeholder": "gender"})
+ 
+    informant_name = StringField(validators=[InputRequired(), Length(min=4, max=20)], render_kw={"placeholder": "informant_name"})
+ 
+    informant_relation = StringField(validators=[InputRequired(), Length(min=4, max=20)], render_kw={"placeholder": "informant_relation"})
+
+    fir_no = IntegerField(validators=[InputRequired(), Length(min=8, max=8)], render_kw={"placeholder": "fir_no"})
+
+    fir_date = StringField(validators=[InputRequired()], render_kw={"placeholder": "fir_date"})
+
+    img = StringField(validators=[InputRequired(), Length(min=4, max=20)], render_kw={"placeholder": "img"})
+
+    police = StringField(validators=[InputRequired(), Length(min=4, max=20)], render_kw={"placeholder": "police"})
 
 
 @ app.route('/register_users', methods=['GET', 'POST'])

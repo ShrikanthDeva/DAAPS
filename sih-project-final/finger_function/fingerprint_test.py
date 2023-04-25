@@ -69,11 +69,14 @@ def get_descriptors(img):
 	return (keypoints, des)
 
 
-def main():
+def finger_find():
 
-	test_image = "C:/Users/shri1/sih/sih-project-2022/sih-project-final/finger_function/test/102_1.tif"
+	test_image = r"C:/Users/shri1/sih/sih-project-2022/sih-project-final/finger_function/database/fingerprint.tif"
+	print(test_image)
 	img1 = cv2.imread(test_image, cv2.IMREAD_GRAYSCALE)
+	# cv2.imshow("vhvg",img1)
 	kp1, des1 = get_descriptors(img1)
+
 
 	folder_dir = r"C:/Users/shri1/sih/sih-project-2022/sih-project-final/finger_function/fingerprints"
 	temp_fingerprints = []
@@ -84,23 +87,14 @@ def main():
 
 	for i in range(len(temp_fingerprints)):
 
-		image_name = r"C:/Users/shri1/sih/sih-project-2022/sih-project-final/finger_function/fingerprints" + temp_fingerprints[i]
+		image_name = r"C:/Users/shri1/sih/sih-project-2022/sih-project-final/finger_function/fingerprints/" + temp_fingerprints[i]
 		img2 = cv2.imread(image_name, cv2.IMREAD_GRAYSCALE)
 		kp2, des2 = get_descriptors(img2)
 
 		# Matching between descriptors
 		bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
 		matches = sorted(bf.match(des1, des2), key= lambda match:match.distance)
-		# Plot keypoints
-		img4 = cv2.drawKeypoints(img1, kp1, outImage=None)
-		img5 = cv2.drawKeypoints(img2, kp2, outImage=None)
-		# axarr[0].imshow(img4)
-		# axarr[1].imshow(img5)
-		# Plot matches
-		img3 = cv2.drawMatches(img1, kp1, img2, kp2, matches, flags=2, outImg=None)
-		# plt.imshow(img3)
-		# plt.show()
-
+		
 		# Calculate score
 		score = 0
 		for match in matches:
@@ -110,12 +104,13 @@ def main():
 			person_name = temp_fingerprints[i]
 			person_name = person_name.rsplit(".",1)[0]
 			print("owner of finger print =",person_name)
+			return person_name
 			break
-		elif (i == len(temp_fingerprints) -1):
-			print("Fingerprint does not match.")
+	else :
+		print("Fingerprint does not match.")
 
-if __name__ == "__main__":
-	try:
-		main()
-	except:
-		raise
+# if __name__ == "__main__":
+# 	try:
+# 		main()
+# 	except:
+# 		raise

@@ -4,7 +4,7 @@ from pymongo import MongoClient
 from os.path import join, dirname, realpath
 from dotenv import load_dotenv
 import base64
-import datetime
+from datetime import datetime
 from flask import Flask, render_template, url_for, redirect, request, flash, Response
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin, login_user, LoginManager, login_required, logout_user, current_user
@@ -18,8 +18,13 @@ import cv2
 from werkzeug.utils import secure_filename
 import numpy as np
 from face_function import face_recognize
-from register import user_details,Aadhar_details
-from finger_function import fingerprint_test
+from register import User,LoginForm,user_details,Aadhar_details,FIR
+
+import sys
+import numpy
+from finger_function.enhance import image_enhance
+from skimage.morphology import skeletonize, thin
+
 
 app = Flask(__name__)
 bcrypt = Bcrypt(app)
@@ -36,7 +41,7 @@ app.secret_key = b'_5#y2L"F4Q8z\n\xec]/'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
-ALLOWED_EXTENSIONS = set(['bmp'])
+ALLOWED_EXTENSIONS = set(['tif'])
 
 
 def allowed_file(filename):
@@ -50,22 +55,147 @@ login_manager.login_view = 'login'
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
+
 global NAME
 NAME = None
+
 class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(20), nullable=False, unique=True)
     password = db.Column(db.String(80), nullable=False)
 
 
-class LoginForm(FlaskForm):
-    username = StringField(validators=[
-                           InputRequired(), Length(min=4, max=20)], render_kw={"placeholder": "Username"})
+class Aadhar_details(db.Model, UserMixin):
+    aadhar = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(20), nullable=False, unique=True)
+    contact = db.Column(db.Integer, nullable=False)
+    address = db.Column(db.String(100), nullable=False)
+    gender = db.Column(db.String(20), nullable=False)
+    dob = db.Column(db.DateTime(),nullable=False)
+    f_name = db.Column(db.String(20), nullable=False, unique=True)
+    m_name = db.Column(db.String(20), nullable=False, unique=True)
 
-    password = PasswordField(validators=[
-                             InputRequired(), Length(min=8, max=20)], render_kw={"placeholder": "Password"})
+class FIR(db.Model, UserMixin):
+    aadhar = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(20), nullable=False, unique=True)
+    contact = db.Column(db.Integer, nullable=False)
+    address = db.Column(db.String(100), nullable=False)
+    gender = db.Column(db.String(20), nullable=False)
+    dob = db.Column(db.DateTime(),nullable=False)
+    informant_name = db.Column(db.String(20), nullable=False)
+    informant_relation = db.Column(db.String(20), nullable=False)
+    fir_no = db.Column(db.Integer, nullable=False, unique=True)
+    fir_date = db.Column(db.DateTime(),nullable=False)
+    police = db.Column(db.String(20), nullable=False)
 
-    submit = SubmitField('Login')
+
+####################3
+def removedot(invertThin):
+    temp0 = numpy.array(invertThin[:])
+    temp0 = numpy.array(temp0)
+    temp1 = temp0/255
+    temp2 = numpy.array(temp1)
+    temp3 = numpy.array(temp2)
+
+    enhanced_img = numpy.array(temp0)
+    filter0 = numpy.zeros((10,10))
+    W,H = temp0.shape[:2]
+    filtersize = 6
+
+    for i in range(W - filtersize):
+        for j in range(H - filtersize):
+            filter0 = temp1[i:i + filtersize,j:j + filtersize]
+
+            flag = 0
+            if sum(filter0[:,0]) == 0:
+                flag +=1
+            if sum(filter0[:,filtersize - 1]) == 0:
+                flag +=1
+            if sum(filter0[0,:]) == 0:
+                flag +=1
+            if sum(filter0[filtersize - 1,:]) == 0:
+                flag +=1
+            if flag > 3:
+                temp2[i:i + filtersize, j:j + filtersize] = numpy.zeros((filtersize, filtersize))
+    return temp2
+
+
+def get_descriptors(img):
+	clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+	img = clahe.apply(img)
+	img = image_enhance.image_enhance(img)
+	img = numpy.array(img, dtype=numpy.uint8)
+	# Threshold
+	ret, img = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
+	# Normalize to 0 and 1 range
+	img[img == 255] = 1
+
+	#Thinning
+	skeleton = skeletonize(img)
+	skeleton = numpy.array(skeleton, dtype=numpy.uint8)
+	skeleton = removedot(skeleton)
+	# Harris corners
+	harris_corners = cv2.cornerHarris(img, 3, 3, 0.04)
+	harris_normalized = cv2.normalize(harris_corners, 0, 255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32FC1)
+	threshold_harris = 125
+	# Extract keypoints
+	keypoints = []
+	for x in range(0, harris_normalized.shape[0]):
+		for y in range(0, harris_normalized.shape[1]):
+			if harris_normalized[x][y] > threshold_harris:
+				keypoints.append(cv2.KeyPoint(y, x, 1))
+	# Define descriptor
+	orb = cv2.ORB_create()
+	# Compute descriptors
+	_, des = orb.compute(img, keypoints)
+	return (keypoints, des)
+
+
+def finger_find():
+
+	test_image = r"C:/Users/shri1/sih/sih-project-2022/sih-project-final/finger_function/database/102_1.tif"
+	print(test_image)
+	img1 = cv2.imread(test_image, cv2.IMREAD_GRAYSCALE)
+	# cv2.imshow("vhvg",img1)
+	kp1, des1 = get_descriptors(img1)
+
+
+	folder_dir = r"C:/Users/shri1/sih/sih-project-2022/sih-project-final/finger_function/fingerprints"
+	temp_fingerprints = []
+	for images in os.listdir(folder_dir):
+    # check if the image ends with tif
+		if (images.endswith(".tif")):
+			temp_fingerprints.append(images)
+
+	for i in range(len(temp_fingerprints)):
+
+		image_name = r"C:/Users/shri1/sih/sih-project-2022/sih-project-final/finger_function/fingerprints/" + temp_fingerprints[i]
+		img2 = cv2.imread(image_name, cv2.IMREAD_GRAYSCALE)
+		kp2, des2 = get_descriptors(img2)
+
+		# Matching between descriptors
+		bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+		matches = sorted(bf.match(des1, des2), key= lambda match:match.distance)
+		
+		# Calculate score
+		score = 0
+		for match in matches:
+			score += match.distance
+		score_threshold = 33
+		if score/len(matches) < score_threshold:
+			person_name = temp_fingerprints[i]
+			person_name = person_name.rsplit(".",1)[0]
+			print("owner of finger print =",person_name)
+			return person_name
+			break
+	else :
+		print("Fingerprint does not match.")
+
+
+#########################3
+
+
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -100,9 +230,9 @@ def upload_image():
     if file.filename == '':
         flash('No image selected for uploading')
         return redirect(request.url)
-    if file and allowed_file(file.filename):
+    if file:
         filename = secure_filename(file.filename)
-        file.save(os.path.join(app.config['UPLOAD_FOLDER'], "fingerprint.bmp"))
+        file.save(os.path.join("C:/Users/shri1/sih/sih-project-2022/sih-project-final/finger_function/database/", "fingerprint.tif"))
         # print('upload_image filename: ' + filename)
         return redirect("/finger")
     else:
@@ -164,9 +294,10 @@ def admin_pic_find():
 @login_required
 def admin_finger_find(): 
     # call ajay function for fingerprint
-    name = fingerprint_test.finger_find()
-    print(name)
-    info = Aadhar_details.query.filter_by(name=name).first()
+    print("finger")
+    NAME = finger_find()
+    print(NAME)
+    info = Aadhar_details.query.filter_by(name=NAME).first()
     return render_template("details_admin.html", Name=info.name, Contact=info.contact,
                            Address=info.address, data_img="", aadhar=info.aadhar)
      
@@ -176,12 +307,9 @@ def admin_finger_find():
 def find_finger():
     print("finger")
     global NAME
-    # Name = fingerprint_test.finger_find()
-    Name = 'Shrikanth'
-    print(Name)
-    # user = Aadhar_details.query.filter_by(name=NAME).first()
-    # print(user.name)
-    return after_find(None)
+    NAME = finger_find()
+    print(NAME)
+    return after_find(NAME)
 
 
 @app.route("/found_form", methods=['POST'])
@@ -204,24 +332,15 @@ def register_fir():
     if request.method == "GET":
         return render_template("dashboard.html")
     else:
-        data = request.form
-        # print(data)
-        doc = {
-            "name": data["name"],
-            "Contact": data["contact"],
-            "Address": data["address"],
-            "Aadhar": data["aadhar"],
-            "fir_no": data["fir_no"],
-            "fir_date": data["fir_date"],
-            "gender": data["gender"],
-            "dob": data["dob"],
-            "img": "",
-            "informant_name": data["informant_name"],
-            "informant_relation": data["informant_relation"],
-            "police": data["police"]
-        }
-        print(doc)
-        return redirect(request.url)
+        form = request.form
+        dob = str(form["dob"]) 
+        new_dob = datetime(int(dob[:4]),int(dob[5:7]),int(dob[8:10]))
+        fir_date = str(form["fir_date"])  
+        new_fir_date = datetime(int(fir_date[:4]),int(fir_date[5:7]),int(fir_date[8:10]))
+        new_user = FIR(name=form["name"],aadhar=form["aadhar"],dob= new_dob,contact=form["contact"],address=form["address"],gender=form["gender"],informant_name=form["informant_name"],informant_relation=form['informant_relation'],fir_no=form["fir_no"],fir_date = new_fir_date,police = form["police"])
+        db.session.add(new_user)
+        db.session.commit()
+        return render_template("admin.html")
        
 
 
@@ -231,32 +350,37 @@ def delete_fir():
     if request.method == "GET":
         return render_template("delete.html")
     else:
-        data = request.form
-        print(data)
-        return redirect(request.url)
+        form = request.form
+        print(form["fir_no"])
+        fir_det = FIR.query.filter_by(fir_no=int(form['fir_no'])).delete()
+        print(fir_det)
+        db.session.commit()
+        return render_template("admin.html")
         
 
 
 @app.route("/show_fir")
 # @login_required
 def show_fir():
-    # create dummy data for FIR
-    data = user_details['xyz']
-    print(data)
-    doc = {
-            "name": data["name"],
-            "Contact": data["contact"],
-            "Address": data["address"],
-            "Aadhar": data["aadhar"],
-            "fir_no": data["fir_no"],
-            "fir_date": data["fir_date"],
-            "gender": data["gender"],
-            "dob": data["dob"],
-            "img": "",
-            "informant_name": data["informant_name"],
-            "informant_relation": data["informant_relation"],
-            "police": data["police"]
+    # retrive data from fir_details table
+    query = FIR.query.all()
+    data = {}
+    for i in query:
+        data[i.name] = {
+            'name' : i.name,
+            'aadhar': i.aadhar,
+            'dob':i.dob,
+            "contact":i.contact,
+            "address":i.address,
+            "gender":i.gender,
+            "informant_name":i.informant_name,
+            "informant_relation":i.informant_relation,
+            "fir_no":i.fir_no,
+            "fir_date":i.fir_date,
+            "img":"",
+            "police":i.police
         }
+    print(data)
     return render_template("show_fir.html", datas=[data])
 
     # PASS IN DUMMY DATA FOR THE HTML
@@ -269,7 +393,7 @@ def pending_fir():
     # founder_data = pending_found.find({})
     # print(founder_data["Aadhar"])
     
-    # create dummy data for recovered
+    # create table for recovered
     founder_data = {
         "founder_name":'abcd',
         "date_found" : "12-09-2020",
@@ -303,7 +427,7 @@ def recovered(filter):
 
     # PASS IN DUMMY DATA FOR THE HTML
 
-
+# create missing table
 @app.route("/missing", defaults={"filter": "all"})
 @app.route("/missing/<filter>")
 def missing(filter):
@@ -361,10 +485,12 @@ def contact():
 def miss_pic():
     return render_template("photo1.html")
 
-def after_find(NAME):
-    if NAME is None:
+def after_find(Name):
+    print("after_find",Name)
+    if Name is None:
         return  render_template("not_found.html") 
     else:
+        user = Aadhar_details.query.filter_by(name=NAME).first()
         return render_template("form.html")
 
 
